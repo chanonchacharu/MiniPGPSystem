@@ -63,6 +63,7 @@ class PGPSystem:
         sha256_hash.update(password.encode('utf-8'))
         hashed_password = sha256_hash.hexdigest()
         # Check if the hashed password are the same or not
+        if username not in self.users.keys(): return False
         return self.users[username].password == hashed_password
 
     def establishedDHSession(self, sender_name, receiver_name):
@@ -209,7 +210,7 @@ class PGPSystem:
                 # Check if there is any user or not
                 if len(self.users.keys()) == 0:
                     print("No users in the system yet!\n")
-                elif len(self.users.keys()) == 0:
+                elif len(self.users.keys()) < 2:
                     print("Only have one user. Please add another user")
                 else:
                     # Display available list of 
