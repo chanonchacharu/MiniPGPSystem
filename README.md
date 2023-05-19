@@ -2,12 +2,16 @@
 
 In this mini project, our group aims to create a Python program to illustrate our knowledge on algorithms related to encryption and decryption messages over a network by using a PGP-like system as a reference. Our project must satisfy the following criteria: cryptographic and applications requirement. We will implement a system that utilizes RSA public key algorithms for key generation, encryption, and decryption to uphold the authenticity standards. Additionally, we choose AES algorithm for symmetric key implementation to deal with confidentiality. The session key generation and key exchange is done using Diffie-Hellman Key Exchange protocol. The project will show the step-by-step process of the whole system from inputting the message to recipient receiving the final message via an interface.
 
-# Files
+# Files and Setup
 
 utility.py : Utility functions necessary for RSA, DH, and PGP system operations
 RSA.py : RSA Algorithm implementation with Encryption and Decryption functions
 DH.py : Diffie-Hellman Key Exchange Protocol for shared secret session key generation
 PGPSystem.py : Main program to run the PGP-like System
+
+Installed this following package:
+
+    pip install pycryptodome
 
 # Testing the Program
 

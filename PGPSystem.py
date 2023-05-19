@@ -1,8 +1,8 @@
+from utility import ByteToBinary, HexadecimalToBinary, BinaryToHexadecimal, BinaryToByte
 from RSA import RSAAlgorithm, KeyGenerator
 from DH import DiffieHellmanConnection
 from Crypto.Util import number
 from Crypto.Cipher import AES
-from utility import ByteToBinary, HexadecimalToBinary, BinaryToHexadecimal, BinaryToByte
 import hashlib
 
 '''
@@ -19,11 +19,18 @@ All message are at runtime, so nothing will be saved
 numOfBit = 16
 
 class User:
-    def __init__(self, username):
+    def __init__(self, username, password):
         self.username = username
+        self.password = self.hashPassword(password)
         self.publicKey, self.privateKey = KeyGenerator(numOfBit).generate_key()
         self.messageHistory = []
     
+    def hashPassword(self, password):
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(password.encode('utf-8'))
+        hashed_password = sha256_hash.hexdigest()
+        return hashed_password
+
     def display_key(self):
         print(f"User: {self.username}\nPU: {self.publicKey}\nPK: {self.privateKey}")
 
@@ -41,25 +48,36 @@ class PGPSystem:
         self.users = {}
         self.sessionKeyStorage = {}
     
-    def add_user(self, name):
+    def add_user(self, name, password):
         if name in self.users.keys():
             print("Username already exist! Choose a new one.")
         else:
-            self.users[name] = User(name)
-            print(f"User {name} has been created\n")
+            self.users[name] = User(name, password)
+            # Display username and password (incase the users forgot)
+            print(f"User {name}, Password: {password} has been created\n")
             self.users[name].display_key()
     
+    def userVerification(self, username, password):
+        # Compute the hashed password
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(password.encode('utf-8'))
+        hashed_password = sha256_hash.hexdigest()
+        # Check if the hashed password are the same or not
+        return self.users[username].password == hashed_password
+
     def establishedDHSession(self, sender_name, receiver_name):
         # Check if the session between two user has already been created
         userpairkey = sender_name+";;"+receiver_name
+        reversed_userpairkey = receiver_name+";;"+sender_name
 
-        if userpairkey not in self.sessionKeyStorage.keys():
+        if userpairkey not in self.sessionKeyStorage.keys() and reversed_userpairkey not in self.sessionKeyStorage.keys():
             public_prime = number.getPrime(16)
             public_generator = None
             for g in range(2, public_prime):
                 if pow(g, (public_prime - 1) // 2, public_prime) != 1 and pow(g, public_prime - 1, public_prime) == 1:
                     public_generator = g
 
+            # Generate random prime numbers as private prime for sender and reciever
             sender_private = number.getPrime(16)
             receiver_private = number.getPrime(16)
 
@@ -75,6 +93,7 @@ class PGPSystem:
             sessionKey =  hash_bytes 
 
             self.sessionKeyStorage[userpairkey] = sessionKey
+            self.sessionKeyStorage[reversed_userpairkey] = sessionKey
         
         return self.sessionKeyStorage[userpairkey]
 
@@ -117,7 +136,8 @@ class PGPSystem:
 
         # This part still missing: {hash-sha1(m)}_PRsender || len({hash-sha1(m)}_PRsender)
         completeMessage = binaryCiphertext +";"+ signedMessage +";" + binaryNonce + ";" + binaryDigest
-        print(f"Encrypted Message: {completeMessage}")
+        # Show the encrypted message structure (for educational purposes)
+        print(f"\nEncrypted Message: {completeMessage}\n")
 
         #-----------------------Decrypt Plaintext message------------------------#
         # Decrypt for the plaintext message
@@ -149,7 +169,7 @@ class PGPSystem:
             print("Successful! The digital signature is valid.")
             print(f"Message sent from {sender.username} to {receiver.username}")
             # Create a message object and add it into messageHistory of Sender and Receiver
-            message = Message(sender.username, receiver.username, plaintextMessage)
+            message = Message(sender.username, receiver.username, plaintextMessage + " {SSSK: " + str(sessionKey) + "}")
             sender.messageHistory.append(message)
             receiver.messageHistory.append(message)
         else:
@@ -182,7 +202,8 @@ class PGPSystem:
 
             if choice == "1":
                 name = input("Enter new username: ")
-                self.add_user(name)
+                password = input("Enter password: ")
+                self.add_user(name, password)
 
             elif choice == "2":
                 # Check if there is any user or not
@@ -196,24 +217,85 @@ class PGPSystem:
                     for idx, user in enumerate(self.users.keys()):
                         print(f"{idx+1}: {user}")
                     print()
-                    sender_name = input("Enter sender name: ")
-                    recipient_name = input("Enter recipient name: ")
-                
-                
-                    # Check for valid sender and recipient
-                    if sender_name in self.users.keys() and recipient_name in self.users.keys():
-                        chatroomEnded = False
-                        while chatroomEnded != True:
-                            content = input("Enter message content: ")
-                            self.send_message(sender_name, recipient_name, content)
-                            # Check if the user would like to end the message
-                            checkStatus = input("Send more messages (Y/N): ")
-                            if checkStatus.lower() == "y":
-                                continue 
+
+                    # Adding sending message options: one users or multiple users
+                    print("Message Options:\n1.Single Recipient\n2.Multiple Recipient\n")
+                    messageOptions = input("Enter message options: ")
+
+                    def validateUsersExistance(user_list):
+                        for username in user_list:
+                            if username not in self.users.keys():
+                                return False
+                        return True
+
+                    if messageOptions == "1":
+                        sender_name = input("Enter sender name: ")                            
+                        recipient_name = input("Enter recipient name: ")
+        
+                        if validateUsersExistance([sender_name, recipient_name]):
+                            # Sender verification process
+                            senderPassword = input("Enter password: ")
+                            isVerifiedSender = self.userVerification(sender_name, senderPassword)
+
+                            if isVerifiedSender:
+                                print("Password Authenticate Successfully.\n")
+                                chatroomEnded = False
+                                while chatroomEnded != True:
+                                    content = input("Enter message content: ")
+                                    self.send_message(sender_name, recipient_name, content)
+                                    # Check if the user would like to end the message
+                                    checkStatus = input("Send more messages (Y/N): ")
+                                    if checkStatus.lower() == "y":
+                                        continue 
+                                    else:
+                                        chatroomEnded = True
                             else:
-                                chatroomEnded = True
+                                print("Invalid Password. Not authorized to send message. ")
+                            
+                        else:
+                            print("Invalid username(s)...")
+
+                    elif messageOptions == "2":
+                        sender_name = input("Enter sender name: ")
+                        askRecipeint = True
+                        recipient_list = []
+                        while askRecipeint != False:
+                            recipient_name = input("Enter recipient name: ")
+                            recipient_list.append(recipient_name)
+                            isMoreReceiver = input("Any more recipients (y/n): ")
+                            if isMoreReceiver.lower() == "y":
+                                continue
+                            else:
+                                askRecipeint = False
+                        
+                        user_list = [sender_name] + recipient_list
+                        if validateUsersExistance(user_list):
+                            # Sender verification process
+                            senderPassword = input("Enter password: ")
+                            isVerifiedSender = self.userVerification(sender_name, senderPassword)
+
+                            if isVerifiedSender:
+                                print("Password Authenticate Successfully.\n")
+                                chatroomEnded = False
+                                while chatroomEnded != True:
+                                    content = input("Enter message content: ")
+                                    for recipient_name in recipient_list:
+                                        self.send_message(sender_name, recipient_name, content)
+                                    # Check if the user would like to end the message
+                                    checkStatus = input("Send more messages (Y/N): ")
+                                    if checkStatus.lower() == "y":
+                                        continue 
+                                    else:
+                                        chatroomEnded = True
+                            else:
+                                print("Invalid Password. Not authorized to send message. ")
+
+                            
+                        else:
+                            print("Invalid username(s)...")          
+
                     else:
-                        print("Invalid username(s)...")
+                        print("Wrong Message Options. Please try again later")
                 
             elif choice == "3":
                 # Check if there is any user or not
@@ -228,9 +310,19 @@ class PGPSystem:
                         print(f"{idx+1}: {user}")
                     print()
                     user_name = input("Enter username to see message history: ")
-                    self.view_message_history(user_name)
+                    user_password = input("Enter password: ")
+                    isVerifiedUser = self.userVerification(user_name, user_password)
+
+                    if isVerifiedUser:
+                        self.view_message_history(user_name)
+                    else:
+                        print("Incorrect Pass. Cannot granted the request to see message history")
             
             elif choice == "q":
+                print()
+                print("-"*45)
+                print("Thank you for using our PGP system")
+                print("-"*45)
                 break
                 
             else:
